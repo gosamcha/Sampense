@@ -205,8 +205,11 @@ export default function DailyPage({
       setAiText('')
     } catch (error) {
       console.error(error)
+
       alert(
-        'AI classification failed. Check GEMINI_API_KEY and run through Vercel, then try again.',
+        error instanceof Error
+          ? error.message
+          : 'AI classification failed.',
       )
     } finally {
       setAiLoading(false)
