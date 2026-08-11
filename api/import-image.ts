@@ -5,7 +5,7 @@ import {
   getGeminiModel,
   transactionArraySchema,
   type ApiCategory,
-} from './_gemini'
+} from './_gemini.js'
 
 type RequestBody = {
   imageDataUrl?: string

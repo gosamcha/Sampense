@@ -5,7 +5,7 @@ import {
   getGeminiModel,
   transactionSchema,
   type ApiCategory,
-} from './_gemini'
+} from './_gemini.js'
 
 type RequestBody = {
   text?: string
