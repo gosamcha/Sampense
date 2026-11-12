@@ -27,7 +27,7 @@ export default function MenuDrawer({ theme, onClose }: MenuDrawerProps) {
   async function reset() {
     if (
       !window.confirm(
-        '이 계정의 가계부를 초기화할까요? 삭제는 다른 기기에도 동기화됩니다. 먼저 EXPORT JSON으로 백업해 주세요.',
+        'Reset this account? Deletions will sync to your other devices. Export a JSON backup first.',
       )
     ) {
       return

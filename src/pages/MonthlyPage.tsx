@@ -23,6 +23,7 @@ import { clamp, formatKRW, hexWithAlpha } from '../utils/money'
 import ProgressBar from '../components/ProgressBar'
 import IncomeModal from '../components/IncomeModal'
 import PlanModal from '../components/PlanModal'
+import { monthlyExpenses } from '../utils/monthly'
 
 type MonthlyPageProps = {
   selectedDate: string
@@ -87,7 +88,10 @@ export default function MonthlyPage({
     setMemoText(storedMemo?.text ?? '')
   }, [currentMonth, storedMemo?.text])
 
-  const totalExpense = transactions.reduce((sum, item) => sum + item.amount, 0)
+  const { totalExpense, categoryTotals } = useMemo(
+    () => monthlyExpenses(transactions, plans, categories),
+    [transactions, plans, categories],
+  )
   const totalIncome = incomes.reduce((sum, item) => sum + item.amount, 0)
   const balance = totalIncome - totalExpense
 
@@ -100,20 +104,6 @@ export default function MonthlyPage({
   }, [transactions])
 
   const maxDaily = Math.max(...dailyTotals.values(), 1)
-
-  const categoryTotals = useMemo(
-    () =>
-      categories
-        .map((category) => ({
-          category,
-          amount: transactions
-            .filter((item) => item.categoryId === category.id)
-            .reduce((sum, item) => sum + item.amount, 0),
-        }))
-        .filter((item) => item.amount > 0)
-        .sort((a, b) => b.amount - a.amount),
-    [categories, transactions],
-  )
 
   const monthlyBudgets = categories.filter(
     (category) =>
@@ -160,9 +150,9 @@ export default function MonthlyPage({
 
       const blob = await toBlob(captureRef.current, {
         width: 1080,
-        height: 1350,
+        height: captureRef.current.scrollHeight,
         pixelRatio: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#ffffff',
         cacheBust: false,
       })
 
@@ -300,9 +290,7 @@ export default function MonthlyPage({
           </div>
           <div className="budget-card-list">
             {monthlyBudgets.map((category) => {
-              const spent = transactions
-                .filter((item) => item.categoryId === category.id)
-                .reduce((sum, item) => sum + item.amount, 0)
+              const spent = categoryTotals.find(item => item.category.id === category.id)?.amount ?? 0
               return (
                 <div key={category.id} className="budget-progress-row">
                   <div className="budget-progress-head">
@@ -333,6 +321,7 @@ export default function MonthlyPage({
           <div>
             <div className="eyebrow">FIXED & PLANNED</div>
             <h2>Monthly Items</h2>
+            <p className="monthly-items-note">Included in Expense and Monthly Summary, not the spending calendar.</p>
           </div>
           <button
             type="button"
@@ -597,9 +586,9 @@ function MonthlyCapture({
           </section>
 
           <section className="capture-panel">
-            <div className="capture-panel-title">TOP CATEGORIES</div>
+            <div className="capture-panel-title">MONTHLY SUMMARY</div>
             <div className="capture-category-list">
-              {categoryTotals.slice(0, 6).map(({ category, amount }) => (
+              {categoryTotals.map(({ category, amount }) => (
                 <div key={category.id} className="capture-category-row">
                   <div>
                     <span

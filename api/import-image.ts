@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   categoryPrompt,
-  getGemini,
+  generateExpense, aiError, normalizeTransaction,
   getGeminiModel,
   transactionArraySchema,
   type ApiCategory,
@@ -47,7 +47,6 @@ export default async function handler(
       return
     }
 
-    const ai = getGemini()
     const prompt = `
 You are reading a screenshot of card/bank payment history for a private Korean personal-finance app.
 Today's local date is ${today}.
@@ -59,7 +58,8 @@ Rules:
 - Only return actual expense/payment rows.
 - amount must be a positive KRW number.
 - Resolve dates to YYYY-MM-DD. When the screenshot omits a year, use the year that best matches ${today}.
-- description should be a short useful label.
+- description must contain only the purchased item/service, excluding the merchant, amount and date. Preserve the original language.
+- If no product is visible, use description="Purchase". Do not invent items or duplicate the merchant name.
 - merchant should contain the merchant/store/service name when visible, otherwise "".
 - categoryId MUST be one of the ids below. Never invent categories.
 - confidence must be 0 to 1.
@@ -69,7 +69,7 @@ Categories:
 ${categoryPrompt(categories)}
 `.trim()
 
-    const result = await ai.models.generateContent({
+    const result = await generateExpense({
       model: getGeminiModel(),
       contents: [
         {
@@ -86,23 +86,15 @@ ${categoryPrompt(categories)}
       },
     })
 
-    const parsed = JSON.parse(result.text || '{"transactions":[]}')
-    const allowedIds = new Set(categories.map((category) => category.id))
-
-    const transactions = Array.isArray(parsed.transactions)
-      ? parsed.transactions.map((item: any) => ({
-          ...item,
-          categoryId: allowedIds.has(item.categoryId)
-            ? item.categoryId
-            : categories[0].id,
-        }))
-      : []
+    const parsed = JSON.parse(result.text || '{}')
+    if (!Array.isArray(parsed.transactions)) throw new Error('Invalid image result')
+    const transactions = parsed.transactions.map((item: unknown) => normalizeTransaction(item, categories, today))
 
     response.status(200).json({ transactions })
   } catch (error) {
-    console.error(error)
-    response.status(500).json({
-      error: error instanceof Error ? error.message : 'Unknown AI error',
-    })
+    const failure = aiError(error)
+    console.error('Image AI failed', failure.status)
+    if (failure.retryAfter) response.setHeader('Retry-After', failure.retryAfter)
+    response.status(failure.status).json(failure)
   }
 }

@@ -15,15 +15,15 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? 'undefined'
 }
 export function validateSnapshot(value: unknown): asserts value is Snapshot {
-  if (!value || typeof value !== 'object') throw new Error('잘못된 백업 형식입니다.')
+  if (!value || typeof value !== 'object') throw new Error('Invalid backup format.')
   for (const store of stores) {
     const rows = (value as Snapshot)[store]
-    if (!Array.isArray(rows)) throw new Error(`저장소 누락: ${store}`)
+    if (!Array.isArray(rows)) throw new Error(`Missing data store: ${store}`)
     const keys = new Set()
     for (const row of rows) {
       const key = row?.[keyFields[store]]
-      if (!row || !['string', 'number'].includes(typeof key) || keys.has(key)) throw new Error(`잘못된 키: ${store}`)
-      if (keyFields[store] === 'id' && (!Number.isSafeInteger(key) || Number(key) <= 0)) throw new Error('잘못된 숫자 ID')
+      if (!row || !['string', 'number'].includes(typeof key) || keys.has(key)) throw new Error(`Invalid record key: ${store}`)
+      if (keyFields[store] === 'id' && (!Number.isSafeInteger(key) || Number(key) <= 0)) throw new Error('Invalid numeric ID')
       keys.add(key)
     }
   }

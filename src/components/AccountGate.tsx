@@ -15,7 +15,7 @@ export default function AccountGate() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
-  const [syncState, setSyncState] = useState<SyncState>({ message: '동기화 준비' })
+  const [syncState, setSyncState] = useState<SyncState>({ message: 'Preparing sync' })
   const engine = useRef<ReturnType<typeof createSync> | null>(null)
   const account = useRef<string | null>(null)
   useEffect(() => {
@@ -63,31 +63,31 @@ export default function AccountGate() {
     try { await work() } catch (e) { setMessage(e instanceof Error ? e.message : String((e as {message?: string})?.message ?? e)) }
     finally { setBusy(false) }
   }
-  if (loading) return <div className="account-panel">로그인 확인 중…</div>
-  if (!supabase) return <div className="account-panel">Supabase 환경 변수를 설정하고 앱을 다시 실행해 주세요.</div>
+  if (loading) return <div className="account-panel">Checking your session…</div>
+  if (!supabase) return <div className="account-panel">Configure Supabase and restart the app.</div>
   if (!session) return <main className="account-panel">
-    <h1>Sampense</h1><p>같은 계정으로 PC와 휴대폰의 가계부를 연결하세요.</p>
+    <h1>Sampense</h1><p>Sign in to access your expenses on any device.</p>
     <form onSubmit={e => { e.preventDefault(); void action(() => signIn(email, password)) }}>
-      <label>이메일<input type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></label>
-      <label>비밀번호<input type="password" autoComplete="current-password" required minLength={6} value={password} onChange={e => setPassword(e.target.value)} /></label>
-      <button disabled={busy} type="submit">로그인</button>
+      <label>Email<input type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></label>
+      <label>Password<input type="password" autoComplete="current-password" required minLength={6} value={password} onChange={e => setPassword(e.target.value)} /></label>
+      <button disabled={busy} type="submit">Sign in</button>
       <button disabled={busy || !email || password.length < 6} type="button" onClick={() => void action(async () => {
         const data = await signUp(email, password)
-        if (!data.session) setMessage('가입 확인 메일을 확인한 뒤 로그인해 주세요.')
-      })}>회원가입</button>
+        if (!data.session) setMessage('Check your confirmation email, then sign in.')
+      })}>Sign up</button>
     </form><p role="status">{message}</p>
   </main>
   if (!ready) return <main className="account-panel">
-    <p role="status">{message || '가계부를 불러오는 중…'}</p>
-    {message && <button onClick={() => setRetry(value => value + 1)}>다시 시도</button>}
+    <p role="status">{message || 'Loading your expenses…'}</p>
+    {message && <button onClick={() => setRetry(value => value + 1)}>Try again</button>}
   </main>
   return <>
-    {(syncState.conflict || syncState.error) && <section className="sync-bar" aria-label="동기화 알림">
+    {(syncState.conflict || syncState.error) && <section className="sync-bar" aria-label="Sync notification">
       <span role="status">{syncState.message}</span>
       {syncState.conflict && <button disabled={busy} onClick={() => void action(async () => {
         downloadSnapshot(await readSnapshot(db))
-        if (window.confirm('이 기기 버전은 백업으로 보관하고 클라우드 버전을 사용합니다. 계속할까요?')) await engine.current?.run(true)
-      })}>충돌: 백업 후 클라우드 버전 사용</button>}
+        if (window.confirm('Keep a backup of this device and use the cloud version? Continue?')) await engine.current?.run(true)
+      })}>Back up and use cloud version</button>}
       {message && <span role="alert">{message}</span>}
     </section>}<App />
   </>

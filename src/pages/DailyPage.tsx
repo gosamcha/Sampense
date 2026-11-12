@@ -17,10 +17,12 @@ import {
   startOfWeek,
 } from '../utils/date'
 import { imageFileToDataUrl } from '../utils/image'
-import { formatKRW, normalizeMerchant } from '../utils/money'
+import { formatKRW } from '../utils/money'
 import ProgressBar from '../components/ProgressBar'
 import TransactionModal from '../components/TransactionModal'
 import ImportReviewModal from '../components/ImportReviewModal'
+import { cleanDescription, parseKnownMerchant, splitTrailingPrice } from '../utils/expenseInput'
+import { requestAi } from '../utils/aiRequest'
 
 type DailyPageProps = {
   selectedDate: string
@@ -35,6 +37,7 @@ export default function DailyPage({
 }: DailyPageProps) {
   const [aiText, setAiText] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
+  const [aiNotice, setAiNotice] = useState('')
   const [draft, setDraft] = useState<TransactionDraft | null>(null)
   const [reviewItems, setReviewItems] = useState<AiTransactionResult[] | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -137,24 +140,18 @@ export default function DailyPage({
   async function classifyText() {
     const text = aiText.trim()
     if (!text || aiLoading) return
+    setAiNotice('')
 
     const localMatch = merchantRules
       .filter((rule) => rule.merchantKey.length >= 2)
       .sort((a, b) => b.merchantKey.length - a.merchantKey.length)
-      .find((rule) => normalizeMerchant(text).includes(rule.merchantKey))
+      .find((rule) => categories.some(c => c.id === rule.categoryId) && parseKnownMerchant(text, rule.merchantKey))
+    const localParsed = localMatch && parseKnownMerchant(text, localMatch.merchantKey)
 
-    const numberMatches = [...text.matchAll(/\d[\d,]*/g)]
-      .map((match) => Number(match[0].replaceAll(',', '')))
-      .filter((value) => value > 0)
-
-    if (localMatch && numberMatches.length > 0) {
-      const amount = Math.max(...numberMatches)
-      const merchant = localMatch.merchantKey
+    if (localMatch && localParsed) {
       setDraft({
         date: selectedDate,
-        description: text,
-        merchant,
-        amount,
+        ...localParsed,
         categoryId: localMatch.categoryId,
         source: 'ai',
       })
@@ -165,10 +162,7 @@ export default function DailyPage({
     setAiLoading(true)
 
     try {
-      const response = await fetch('/api/classify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const result = await requestAi<AiTransactionResult>('/api/classify', {
           text,
           today: selectedDate,
           categories: categories
@@ -178,15 +172,7 @@ export default function DailyPage({
               name: category.name,
               spendingType: category.spendingType,
             })),
-        }),
       })
-
-      if (!response.ok) {
-        const detail = await response.text()
-        throw new Error(detail || 'AI request failed')
-      }
-
-      const result = (await response.json()) as AiTransactionResult
       const fallback =
         categories.find((category) => category.name === 'ETC')?.id ??
         categories[0]?.id ??
@@ -194,7 +180,7 @@ export default function DailyPage({
 
       setDraft({
         date: isValidDateKey(result.date) ? result.date : selectedDate,
-        description: result.description || text,
+        description: cleanDescription(result.description || text, result.merchant || '', result.amount),
         merchant: result.merchant || '',
         amount: result.amount,
         categoryId: categories.some((category) => category.id === result.categoryId)
@@ -204,13 +190,13 @@ export default function DailyPage({
       })
       setAiText('')
     } catch (error) {
-      console.error(error)
-
-      alert(
-        error instanceof Error
-          ? error.message
-          : 'AI classification failed.',
-      )
+      const notice = error instanceof Error ? error.message : 'AI classification failed.'
+      const parsed = splitTrailingPrice(text)
+      if (parsed) {
+        const fallback = categories.find(c => c.name === 'ETC') ?? categories[0]
+        if (fallback?.id) setDraft({ date: selectedDate, description: parsed.label, merchant: '', amount: parsed.amount, categoryId: fallback.id, source: 'manual' })
+      }
+      setAiNotice(notice + (parsed ? ' A manual draft is ready; review the merchant and category before saving.' : ' Your input has been kept.'))
     } finally {
       setAiLoading(false)
     }
@@ -220,12 +206,10 @@ export default function DailyPage({
     if (!file || aiLoading) return
 
     setAiLoading(true)
+    setAiNotice('')
     try {
       const imageDataUrl = await imageFileToDataUrl(file)
-      const response = await fetch('/api/import-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const result = await requestAi<{ transactions: AiTransactionResult[] }>('/api/import-image', {
           imageDataUrl,
           today: selectedDate,
           categories: categories
@@ -235,24 +219,11 @@ export default function DailyPage({
               name: category.name,
               spendingType: category.spendingType,
             })),
-        }),
       })
-
-      if (!response.ok) {
-        const detail = await response.text()
-        throw new Error(detail || 'Image import failed')
-      }
-
-      const result = (await response.json()) as {
-        transactions: AiTransactionResult[]
-      }
-
-      setReviewItems(result.transactions)
+      if (!result.transactions.length) setAiNotice('No payment rows were found. Crop the image to the payment details and try again.')
+      else setReviewItems(result.transactions)
     } catch (error) {
-      console.error(error)
-      alert(
-        'Screenshot import failed. Check GEMINI_API_KEY and try a clear payment-history image.',
-      )
+      setAiNotice(error instanceof Error ? error.message : 'Image import failed. Try a clearer image.')
     } finally {
       setAiLoading(false)
       if (imageInputRef.current) imageInputRef.current.value = ''
@@ -293,7 +264,7 @@ export default function DailyPage({
         <textarea
           value={aiText}
           onChange={(event) => setAiText(event.target.value)}
-          placeholder="학식 육회비빔밥 6000"
+          placeholder="McDonald's Big Mac meal 8100"
           className="ai-textarea"
           rows={3}  
         />
@@ -331,6 +302,7 @@ export default function DailyPage({
             {aiLoading ? 'READING...' : 'AI ADD'}
           </button>
         </div>
+        {aiNotice && <p className="ai-notice" role="status">{aiNotice}</p>}
       </section>
 
       {budgetCards.length > 0 && (

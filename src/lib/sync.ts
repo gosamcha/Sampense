@@ -27,7 +27,7 @@ export async function initializeAccount(database: SampenseDB, userId: string, mi
   const remote = await loadRecords(userId)
   let initial = remote?.data ?? emptySnapshot()
   if (migrate) {
-    if (remote) throw new Error('이 계정에는 클라우드 데이터가 있습니다. 기존 기기 백업을 보관한 후 클라우드 데이터로 시작해 주세요.')
+    if (remote) throw new Error('This account already has cloud data. Keep a device backup and open the cloud version.')
     const legacy = new SampenseDB()
     try { initial = await readSnapshot(legacy); downloadSnapshot(initial) } finally { legacy.close() }
   }
@@ -53,14 +53,14 @@ export function createSync(database: SampenseDB, userId: string, report: (s: Syn
         const base = (await database.syncMeta.get('base'))?.value as CloudSnapshot | null
         const remote = await loadRecords(userId)
         if (stopped) return
-        if (!remote && base) throw new Error('클라우드 가계부가 삭제되었습니다. 자동 재업로드를 중단했습니다.')
+        if (!remote && base) throw new Error('The cloud ledger was deleted. Automatic upload has been stopped.')
         const result = mergeSnapshots(base?.data ?? emptySnapshot(), local, remote?.data ?? emptySnapshot())
         if (result.conflicts.length && !useCloud) {
-          report({ message: `동시 수정 충돌 ${result.conflicts.length}건. 이 기기 백업을 받은 뒤 클라우드 버전을 선택할 수 있습니다.`, conflict: true }); return
+          report({ message: `${result.conflicts.length} conflicting changes. Back up this device before choosing the cloud version.`, conflict: true }); return
         }
         const merged = useCloud ? remote?.data ?? emptySnapshot() : result.merged
         const saved = remote && equal(merged, remote.data) ? remote : await saveRecord(userId, merged, remote?.revision ?? null)
-        if (!saved || stopped) { if (!stopped) report({ message: '다른 기기의 저장을 감지했습니다. 다시 동기화합니다.' }); return }
+        if (!saved || stopped) { if (!stopped) report({ message: 'Changes from another device detected. Syncing again.' }); return }
         await database.transaction('rw', database.tables, async () => {
           // Edits made while the request was in flight remain pending for the next pass.
           const current = await readSnapshot(database)
@@ -71,10 +71,10 @@ export function createSync(database: SampenseDB, userId: string, report: (s: Syn
             await database.syncMeta.put({ key: 'base', value: saved })
           }
         })
-        report({ message: `동기화 확인 ${new Date().toLocaleTimeString()}` })
+        report({ message: `Synced at ${new Date().toLocaleTimeString()}` })
       })
     } catch (error) {
-      if (!stopped) report({ error: true, message: `기기에 저장됨 · 동기화 대기: ${error instanceof Error ? error.message : String((error as {message?: string})?.message ?? error)}` })
+      if (!stopped) report({ error: true, message: `Saved on this device · Sync pending: ${error instanceof Error ? error.message : String((error as {message?: string})?.message ?? error)}` })
     } finally { busy = false }
   }
   const timer = window.setInterval(() => void run(), 5000)

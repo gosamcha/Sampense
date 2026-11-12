@@ -9,7 +9,7 @@ export async function loadRecords(userId: string): Promise<CloudSnapshot | null>
   if (error) throw error
   if (!data) return null
   const payload = data.payload as CloudSnapshot
-  if (typeof payload?.revision !== 'string') throw new Error('지원하지 않는 클라우드 데이터 형식입니다.')
+  if (typeof payload?.revision !== 'string') throw new Error('Unsupported cloud data format.')
   validateSnapshot(payload.data)
   return payload
 }

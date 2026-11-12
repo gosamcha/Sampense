@@ -6,6 +6,6 @@ const key = env.VITE_SUPABASE_PUBLISHABLE_KEY
 export const supabase = url && key && key.startsWith('sb_publishable_')
   ? createClient(url, key) : null
 export function client() {
-  if (!supabase) throw new Error('VITE_SUPABASE_URL과 VITE_SUPABASE_PUBLISHABLE_KEY를 설정해 주세요.')
+  if (!supabase) throw new Error('Configure VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.')
   return supabase
 }

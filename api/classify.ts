@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   categoryPrompt,
-  getGemini,
+  generateExpense, aiError, normalizeTransaction,
   getGeminiModel,
   transactionSchema,
   type ApiCategory,
@@ -33,7 +33,6 @@ export default async function handler(
       return
     }
 
-    const ai = getGemini()
     const prompt = `
 You are an expense parser for a private Korean personal-finance app.
 
@@ -45,7 +44,9 @@ Rules:
 - If the user says today/오늘, use ${today}.
 - Infer relative dates such as yesterday/어제 from ${today}.
 - If no date is mentioned, use ${today}.
-- description should be short and human-readable.
+- description must contain only the purchased item/service, excluding the merchant, price and date. Never copy the entire input.
+- Preserve the original language of item and merchant names. Example: 맥도날드 베토디 세트 8100 -> merchant="맥도날드", description="베토디 세트", amount=8100.
+- If only the merchant and price are provided, use description="Purchase"; do not invent a product.
 - merchant should be the merchant/store/service name if available, otherwise "".
 - categoryId MUST be one of the category ids listed below.
 - Pick the user's most semantically appropriate category. Do not invent a category.
@@ -58,7 +59,7 @@ User text:
 ${text}
 `.trim()
 
-    const result = await ai.models.generateContent({
+    const result = await generateExpense({
       model: getGeminiModel(),
       contents: prompt,
       config: {
@@ -67,18 +68,13 @@ ${text}
       },
     })
 
-    const parsed = JSON.parse(result.text || '{}')
-    const allowedIds = new Set(categories.map((category) => category.id))
-    if (!allowedIds.has(parsed.categoryId)) {
-      parsed.categoryId = categories[0].id
-      parsed.confidence = Math.min(Number(parsed.confidence) || 0, 0.4)
-    }
+    const parsed = normalizeTransaction(JSON.parse(result.text || '{}'), categories, today)
 
     response.status(200).json(parsed)
   } catch (error) {
-    console.error(error)
-    response.status(500).json({
-      error: error instanceof Error ? error.message : 'Unknown AI error',
-    })
+    const failure = aiError(error)
+    console.error('Expense AI failed', failure.status)
+    if (failure.retryAfter) response.setHeader('Retry-After', failure.retryAfter)
+    response.status(failure.status).json(failure)
   }
 }
