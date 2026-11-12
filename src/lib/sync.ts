@@ -39,7 +39,7 @@ export async function initializeAccount(database: SampenseDB, userId: string, mi
     if (migrate) await database.syncMeta.put({ key: `backup-${Date.now()}`, value: initial })
   })
 }
-export type SyncState = { message: string; conflict?: boolean }
+export type SyncState = { message: string; conflict?: boolean; error?: boolean }
 export function createSync(database: SampenseDB, userId: string, report: (s: SyncState) => void) {
   let stopped = false
   let busy = false
@@ -74,7 +74,7 @@ export function createSync(database: SampenseDB, userId: string, report: (s: Syn
         report({ message: `동기화 확인 ${new Date().toLocaleTimeString()}` })
       })
     } catch (error) {
-      if (!stopped) report({ message: `기기에 저장됨 · 동기화 대기: ${error instanceof Error ? error.message : String((error as {message?: string})?.message ?? error)}` })
+      if (!stopped) report({ error: true, message: `기기에 저장됨 · 동기화 대기: ${error instanceof Error ? error.message : String((error as {message?: string})?.message ?? error)}` })
     } finally { busy = false }
   }
   const timer = window.setInterval(() => void run(), 5000)
