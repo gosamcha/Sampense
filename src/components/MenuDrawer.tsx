@@ -27,7 +27,7 @@ export default function MenuDrawer({ theme, onClose }: MenuDrawerProps) {
   async function reset() {
     if (
       !window.confirm(
-        'Delete all Sampense data on this device? This cannot be undone.',
+        '이 계정의 가계부를 초기화할까요? 삭제는 다른 기기에도 동기화됩니다. 먼저 EXPORT JSON으로 백업해 주세요.',
       )
     ) {
       return
@@ -102,7 +102,7 @@ export default function MenuDrawer({ theme, onClose }: MenuDrawerProps) {
             <div className="section-label">AI</div>
             <p>
               Text and screenshots are sent to Gemini only when you use an AI
-              input button. Saved transactions stay in IndexedDB on this device.
+              input button. Saved transactions are cached on this device and synced to your Supabase account.
             </p>
             <p>
               Set <strong>GEMINI_API_KEY</strong> in Vercel. Do not expose it as

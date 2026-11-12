@@ -10,7 +10,8 @@ import type {
 } from './types'
 import { DEFAULT_THEME, THEME_KEYS } from './theme'
 
-class SampenseDB extends Dexie {
+export class SampenseDB extends Dexie {
+  syncMeta!: Table<{ key: string; value: unknown }, string>
   categories!: Table<Category, number>
   transactions!: Table<Transaction, number>
   incomes!: Table<Income, number>
@@ -19,8 +20,8 @@ class SampenseDB extends Dexie {
   merchantRules!: Table<MerchantRule, string>
   settings!: Table<AppSetting, string>
 
-  constructor() {
-    super('SampenseDB')
+  constructor(name = 'SampenseDB') {
+    super(name)
 
     this.version(1).stores({
       categories: '++id,name,budgetCycle,spendingType,order',
@@ -40,10 +41,26 @@ class SampenseDB extends Dexie {
       merchantRules: 'merchantKey,categoryId,updatedAt',
       settings: 'key',
     })
+    this.version(3).stores({ syncMeta: 'key' })
+    // Preserve old IDs, but allocate new records independently on each device.
+    for (const name of ['categories', 'transactions', 'incomes', 'monthlyPlans']) {
+      this.table(name).hook('creating', (key, object) => {
+        if (key !== undefined) return
+        const random = crypto.getRandomValues(new Uint32Array(2))
+        const id = (random[0] & 0x1fffff) * 0x100000000 + random[1]
+        object.id = id || 1
+        return object.id
+      })
+    }
   }
 }
 
-export const db = new SampenseDB()
+export let db = new SampenseDB()
+export function selectAccount(userId: string) {
+  db.close()
+  db = new SampenseDB(`SampenseDB-account-${userId}`)
+  return db
+}
 
 const DEFAULT_CATEGORIES: Category[] = [
   {

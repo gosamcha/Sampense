@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, seedInitialData } from './db'
+import { db } from './db'
 import type { PageName, ThemeColors } from './types'
 import { DEFAULT_THEME, THEME_KEYS } from './theme'
 import {
@@ -26,10 +26,6 @@ function App() {
   const [captureRequestToken, setCaptureRequestToken] = useState(0)
   const swipeStartX = useRef<number | null>(null)
   const swipeStartY = useRef<number | null>(null)
-
-  useEffect(() => {
-    void seedInitialData()
-  }, [])
 
   const categories =
     useLiveQuery(
